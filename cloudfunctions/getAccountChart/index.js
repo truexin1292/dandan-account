@@ -51,7 +51,10 @@ var AccountChartService = function (mode,date,openId){
     }
     if (o.mode == "getAccountChartByYear") {
       return o.getAccountChartByYear();
-    } 
+    }
+    if (o.mode == "getAccountChartOfYear") {
+      return o.getAccountChartOfYear();
+    }
     return {
       code: -1,
       data: [],
@@ -219,6 +222,86 @@ var AccountChartService = function (mode,date,openId){
             expensesData.push(0);
             netIncomeData.push(0);
           }
+        }
+
+        return _getChartData(xAxisData, incomeData, expensesData, netIncomeData);
+      })
+      .catch(err => {
+        console.error(err);
+        return {
+          data: err,
+          flag: 0
+        };
+      });
+    return {
+      code: 1,
+      data: res,
+      message: '查询账单图表数据成功',
+    };
+
+  }
+
+  o.getAccountChartOfYear = async function () {
+    const { _, db, $ } = await getDBConnection();
+    const res = await db.collection('DANDAN_NOTE')
+      .aggregate()
+      .addFields({
+        // formatDate: $.dateToString({
+        //   date: '$noteDate',
+        //   format: '%Y'
+        // }),
+        noteYear: $.dateToString({
+          date: '$noteDate',
+          format: '%Y'
+        }),
+        income: $.switch({
+          branches: [
+            { case: $.eq(['$flow', 1]), then: '$money' },
+          ],
+          default: 0
+        }),
+        expenses: $.switch({
+          branches: [
+            { case: $.eq(['$flow', 0]), then: $.multiply(['$money', -1]) },
+          ],
+          default: 0
+        }),
+      })
+      .match({
+        openId: wxContext.OPENID,
+       // formatDate: o.date,
+        isDel: false
+      })
+      .group({
+        _id: '$noteYear',
+        income: $.sum('$income'),
+        expenses: $.sum('$expenses'),
+      })
+      .project({
+        _id: 0,
+        noteYear: '$_id',
+        income: 1,
+        expenses: 1,
+        netIncome: $.add(['$income', '$expenses'])
+      })
+      .sort({
+        noteYear: 1,
+      })
+      .limit(100)
+      .end()
+      .then(res => {
+        let resList = res.list;
+        let resListSize = resList.length;
+        let xAxisData = new Array();      //x轴数据
+        var incomeData = new Array();     //收入数据
+        var expensesData = new Array();   //支出数据
+        var netIncomeData = new Array();  //净收入数据
+        for (let i = 0; i < resListSize; i++) {
+          xAxisData.push(resList[i].noteYear + "年");
+          //该日期存有账单数据
+          incomeData.push(strip(resList[i].income));
+          expensesData.push(strip(resList[i].expenses));
+          netIncomeData.push(strip(resList[i].netIncome));
         }
 
         return _getChartData(xAxisData, incomeData, expensesData, netIncomeData);
