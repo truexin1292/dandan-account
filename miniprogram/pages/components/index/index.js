@@ -3,6 +3,7 @@ import { parseTime } from '../../../util'
 
 let globalDefaultCategory = {}
 let subscribeStatus = false // 是否已接受订阅推送
+let isShowSubscribeTips = false
 Component({
   options: {
     styleIsolation: 'shared',
@@ -26,6 +27,7 @@ Component({
     payType: '支付宝',
     payTypeList: [],
     specialDay: Date.parse(new Date()) < 1577318400000, // before christmas.
+    showAuthDialog: false,
   },
   ready() {
     const now = new Date()
@@ -67,6 +69,9 @@ Component({
     }
     // 获取一下订阅消息状态，如果是可以推送消息的话就进行推送授权收集
     this.getUserSucscribeStatus()
+    // wx.downloadFile({
+    //   url: ''
+    // })
   },
   /**
    * 组件的方法列表
@@ -173,9 +178,11 @@ Component({
         showPayType,
         payType,
       } = this.data
-      if (!sum) return
-      // hack，欧元键盘不显示.号所以需要进行替换
-      const transSum = sum.replace(',', '.')
+      let transSum = 0
+      if (sum) {
+        // hack，欧元键盘不显示.号所以需要进行替换
+        transSum = Number(sum.toString().replace(',', '.'))
+      }
       // eslint-disable-next-line no-restricted-globals
       if (!/^0{1}([.]\d{1,2})?$|^[1-9]\d*([.]{1}[0-9]{1,2})?$/.test(Number(transSum)) || isNaN(Number(transSum))) {
         wx.showToast({
@@ -199,20 +206,24 @@ Component({
         return false
       }
       // 埋点！增加订阅的机会--!!决定还是在账单成功后再增加一个吧
-      if (subscribeStatus) {
+      if (subscribeStatus && !isShowSubscribeTips) {
         wx.requestSubscribeMessage({
           tmplIds: ['29PkwuWSDZ5qCe_bjIAYE8UPbw4A7HIXL_ZNmNCD__s'],
           success(res) {
+            // 如果弹出一次了，就不要再烦人家了
+            isShowSubscribeTips = true
+            // eslint-disable-next-line no-console
             if (res.errMsg === 'requestSubscribeMessage:ok') {
               // 如果订阅成功，则修改状态
               self.changeStatus('open')
             }
           },
           fail() {
-            wx.showToast({
-              title: '由于拒绝订阅，所以将关闭推送',
-              icon: 'none',
-            })
+            setTimeout(() => {
+              self.setData({
+                showAuthDialog: true,
+              })
+            }, 2000)
             self.changeStatus('close')
           },
         })
@@ -346,6 +357,7 @@ Component({
     closeDialog() {
       this.setData({
         showPayTypeDialog: false,
+        showAuthDialog: false,
       })
       this.triggerEvent('hideTab', false)
     },
@@ -374,6 +386,16 @@ Component({
         success() {},
         complete() {
           self.getUserSucscribeStatus()
+        },
+      })
+    },
+    openSetting() {
+      const self = this
+      wx.openSetting({
+        success() {
+          self.setData(({
+            showAuthDialog: false,
+          }))
         },
       })
     },
