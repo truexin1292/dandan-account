@@ -55,5 +55,22 @@ Component({
     showBanner() {
       this.triggerEvent('showBanner')
     },
+    goTotarget() {
+      wx.cloud.callFunction({
+        name: 'target',
+        data: {
+          mode: 'check',
+        },
+        success(res) {
+          let path = '/pages/target-set/target-set'
+          if (res.result.code === 1 && res.result.data.length) {
+            path = '/pages/target/target'
+          }
+          wx.navigateTo({
+            url: path,
+          })
+        },
+      })
+    },
   },
 })
